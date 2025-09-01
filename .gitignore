@@ -1,0 +1,17 @@
+
+
+# 训练日志和模型输出
+/unitraj_ckpt/
+/lightning_logs/
+/UniTraj.egg-info/
+/outputs/
+/wandb/
+/tmp/
+
+# 系统文件
+.DS_Store
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.so
