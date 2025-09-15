@@ -9,6 +9,7 @@ from datasets import build_dataset
 from utils.utils import set_seed
 import hydra
 from omegaconf import OmegaConf
+import os
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
@@ -40,4 +41,5 @@ def evaluation(cfg):
 
 
 if __name__ == '__main__':
+    os.environ["WANDB_MODE"] = "offline"
     evaluation()
