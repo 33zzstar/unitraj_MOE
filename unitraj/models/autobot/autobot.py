@@ -390,9 +390,9 @@ class AutoBotEgo(BaseModel):
         return [optimizer], [scheduler]
 
 
-class Criterion(nn.Module):
+class Criterion_autobot(nn.Module):
     def __init__(self, config):
-        super(Criterion, self).__init__()
+        super(Criterion_autobot, self).__init__()
         self.config = config
 
     def forward(self, out, gt, center_gt_final_valid_idx):
@@ -588,3 +588,4 @@ class Criterion(nn.Module):
         loss_cls = (F.cross_entropy(input=pred_scores, target=nearest_mode_idxs, reduction='none'))
 
         return (reg_loss + loss_cls).mean()
+    
