@@ -1,405 +1,157 @@
-# moe.yaml - UniTraj Mixture of Experts Configuration
-# 轨迹预测MoE模型完整配置文件
-
-# ============================================
-# 1. 基础信息
-# ============================================
-experiment:
-  name: "unitraj_moe_waymo"
-  description: "Mixture of Experts for trajectory prediction on Waymo dataset"
-  seed: 42
-  cudnn_deterministic: true
-  cudnn_benchmark: false
-  
-# ============================================
-# 2. 模型配置
-# ============================================
-model:
-  type: "UniTrajMoENetwork"
-  
-  # 专家配置
-  num_experts: 4
-  expert_names: ["autobot", "mtr", "smart", "wayformer"]
-  
-  # 各专家详细配置
-  experts_cfg:
-    - # AutoBot配置
-      type: "AutoBot"
-      hidden_size: 256
-      num_layers: 6
-      num_heads: 8
-      dropout: 0.1
-      num_modes: 6
-      future_steps: 30
-      use_map_encoding: true
-      social_features: true
-      
-    - # MTR配置  
-      type: "MTR"
-      hidden_dim: 512
-      num_intention_clusters: 64
-      num_future_frames: 30
-      motion_decoder:
-        num_layers: 3
-        hidden_dim: 256
-      intention_decoder:
-        temperature: 1.0
-        
-    - # SMART配置
-      type: "SMART"
-      feature_dim: 384
-      num_trajectories: 6
-      prediction_horizon: 30
-      goal_encoder:
-        hidden_dim: 256
-        num_goals: 32
-      trajectory_decoder:
-        num_layers: 2
-        
-    - # Wayformer配置
-      type: "Wayformer"
-      d_model: 768
-      num_layers: 12
-      num_heads: 12
-      prediction_steps: 30
-      max_agents: 128
-      max_polylines: 256
-      dropout: 0.1
-      
-  # 路由器配置
-  router_cfg:
-    type: "UniTrajAttentionRouter"  # "BasicTrajRouter" or "UniTrajAttentionRouter"
-    embed_dim: 128
-    num_heads: 4
-    history_steps: 20
-    num_agents: 128
-    spatial_dim: 2
-    use_map_features: true
-    
-    # 针对AttentionRouter的特定配置
-    temporal_conv_channels: [64, 128, 256]
-    spatial_encoder:
-      hidden_dim: 64
-      graph_radius: 50.0  # meters
-    map_encoder:
-      polyline_dim: 7
-      hidden_dim: 64
-      
-  # MoE核心配置
-  moe_cfg:
-    k: 2  # top-k experts for inference
-    fusion_strategy: "attention"  # "weighted_average", "attention", "gating"
-    normalize_outputs: true
-    temperature: 1.0
-    
-    # 负载均衡配置
-    load_balancing: true
-    lb_loss_weight_initial: 0.01
-    lb_loss_decay_rate: 0.95
-    lb_loss_min_weight: 0.001
-    
-    # 辅助损失配置
-    auxiliary_loss_weight: 0.1
-    sparsity_loss_weight: 0.01
-    diversity_loss_weight: 0.01
-    
-    # 融合模块配置
-    fusion_module:
-      attention:
-        hidden_dim: 256
-        num_heads: 8
+model_name: MOE
+num_experts: 2
+in_channels: 256
+hidden_size: 256
+num_queries_enc: 192
+num_map_feature: 29
+num_agent_feature: 39
+num_queries_dec: 64
+max_num_roads: 384
+max_num_agents: 32
+train_batch_size: 8
+eval_batch_size: 8
+max_epochs: 40
+grad_clip_norm: 5
+learning_rate: 0.00075 # 0.00075 # 1e-3 for lanegcn
+learning_rate_sched: [ 10, 20, 30, 40, 50 ]
+optimizer: Adam #According to PyTorch naming
+scheduler: multistep # plateau, multistep
+experts_cfg:
+      - type: autobot
+        num_modes: 6
+        hidden_size: 128
+        num_encoder_layers: 2
+        num_decoder_layers: 2
+        tx_hidden_size: 384
+        tx_num_heads: 16
         dropout: 0.1
-      gating:
-        hidden_dim: 256
-        num_layers: 2
-        
-# ============================================
-# 3. 数据配置
-# ============================================
-data:
-  dataset_type: "WaymoDataset"  # "WaymoDataset", "ArgoverseDataset", "NuScenesDataset"
-  
-  # 数据路径
-  data_root: "/path/to/waymo/motion/dataset"
-  train_split: "training"
-  val_split: "validation"
-  test_split: "testing"
-  
-  # 数据预处理
-  preprocessing:
-    history_steps: 20  # 2 seconds at 10Hz
-    future_steps: 30   # 3 seconds at 10Hz
-    step_time: 0.1     # 10Hz
-    
-    # 归一化参数
-    normalize_trajectory: true
-    coordinate_system: "agent_centric"  # "global" or "agent_centric"
-    rotation_normalize: true
-    
-    # 场景裁剪
-    max_agents: 128
-    max_polylines: 256
-    polyline_resolution: 1.0  # meters
-    agent_radius: 150.0  # meters
-    
-  # 数据增强
-  augmentation:
-    enabled: true
-    random_flip: true
-    random_rotation:
-      enabled: true
-      angle_range: [-30, 30]  # degrees
-    random_translation:
-      enabled: true
-      range: [-5, 5]  # meters
-    trajectory_dropout:
-      enabled: true
-      prob: 0.1
-      
-  # 数据加载器配置
-  dataloader:
-    batch_size: 32
-    num_workers: 8
-    pin_memory: true
-    prefetch_factor: 2
-    persistent_workers: true
-    
-# ============================================
-# 4. 训练配置
-# ============================================
-training:
-  # 基础训练参数
-  num_epochs: 100
-  gradient_clip_val: 5.0
-  gradient_accumulation_steps: 1
-  mixed_precision: true  # 使用混合精度训练
-  
-  # 优化器配置
-  optimizer:
-    type: "AdamW"
-    lr: 0.0001
-    weight_decay: 0.01
-    betas: [0.9, 0.999]
-    eps: 1.0e-8
-    
-  # 学习率调度器
-  lr_scheduler:
-    type: "CosineAnnealingWarmRestarts"
-    T_0: 10
-    T_mult: 2
-    eta_min: 1.0e-6
-    warmup_epochs: 5
-    warmup_lr: 1.0e-5
-    
-  # 损失函数配置
-  loss:
-    # 主要损失
-    trajectory_loss:
-      type: "HuberLoss"  # "MSELoss", "HuberLoss", "SmoothL1Loss"
-      delta: 1.0
-      weight: 1.0
-      
-    # 多模态损失
-    multimodal_loss:
-      enabled: true
-      type: "WinnerTakesAll"  # "WinnerTakesAll", "MultipleChoice"
-      top_k: 1
-      weight: 0.5
-      
-    # 目标点损失
-    endpoint_loss:
-      enabled: true
-      weight: 0.2
-      
-    # 碰撞损失
-    collision_loss:
-      enabled: true
-      weight: 0.1
-      margin: 2.0  # meters
-      
-  # 训练策略
-  strategy:
-    # 早停
-    early_stopping:
-      enabled: true
-      patience: 15
-      min_delta: 0.001
-      mode: "min"
-      
-    # 模型检查点
-    checkpoint:
-      save_top_k: 3
-      monitor: "val/minADE"
-      mode: "min"
-      save_last: true
-      every_n_epochs: 5
-      
-    # 专家预训练
-    expert_pretraining:
-      enabled: true
-      epochs: 20
-      freeze_router: true
-      
-    # 渐进式训练
-    progressive_training:
-      enabled: true
-      stages:
-        - epochs: 20
-          k: 4  # 使用所有专家
-          lb_loss_weight: 0.1
-        - epochs: 30
-          k: 3
-          lb_loss_weight: 0.05
-        - epochs: 50
-          k: 2
-          lb_loss_weight: 0.01
-          
-# ============================================
-# 5. 评估配置
-# ============================================
-evaluation:
-  # 评估指标
-  metrics:
-    - "minADE"  # Minimum Average Displacement Error
-    - "minFDE"  # Minimum Final Displacement Error
-    - "MR"      # Miss Rate
-    - "mAP"     # mean Average Precision
-    - "EPA"     # End Point Accuracy
-    
-  # 评估参数
-  eval_params:
-    k_predictions: 6  # 评估top-6预测
-    miss_threshold: 2.0  # meters
-    horizons: [10, 20, 30]  # 不同时间范围的评估
-    
-  # 可视化配置
-  visualization:
-    enabled: true
-    num_samples: 100
-    save_dir: "visualizations/"
-    plot_expert_contributions: true
-    plot_routing_distribution: true
-    
-# ============================================
-# 6. 推理配置
-# ============================================
-inference:
-  # 推理模式
-  mode: "deterministic"  # "deterministic", "stochastic", "ensemble"
-  
-  # 模型集成
-  ensemble:
-    enabled: false
-    num_models: 5
-    aggregation: "average"  # "average", "voting"
-    
-  # 推理优化
-  optimization:
-    use_onnx: false
-    use_tensorrt: false
-    fp16: true
-    batch_size: 1
-    
-  # 后处理
-  post_processing:
-    trajectory_smoothing: true
-    collision_checking: true
-    map_based_refinement: true
-    
-# ============================================
-# 7. 日志与监控
-# ============================================
-logging:
-  # 日志级别
-  level: "INFO"  # "DEBUG", "INFO", "WARNING", "ERROR"
-  
-  # TensorBoard
-  tensorboard:
-    enabled: true
-    log_dir: "logs/tensorboard/"
-    log_every_n_steps: 50
-    
-  # Weights & Biases
-  wandb:
-    enabled: true
-    project: "unitraj-moe"
-    entity: "your-team"
-    tags: ["moe", "trajectory", "waymo"]
-    log_model: true
-    log_frequency: 100
-    
-  # 监控指标
-  monitoring:
-    log_routing_distribution: true
-    log_expert_usage: true
-    log_gradient_norm: true
-    log_learning_rate: true
-    log_loss_components: true
-    
-# ============================================
-# 8. 硬件与环境配置
-# ============================================
-hardware:
-  # GPU配置
-  gpus: [0, 1, 2, 3]  # GPU ID列表
-  distributed:
-    enabled: true
-    backend: "nccl"
-    find_unused_parameters: true
-    
-  # 内存优化
-  memory:
-    gradient_checkpointing: false
-    empty_cache_freq: 100
-    
-# ============================================
-# 9. 实验管理
-# ============================================
-experiment_management:
-  # 版本控制
-  version: "v1.0.0"
-  
-  # 输出目录
-  output_dir: "experiments/moe_waymo/"
-  
-  # 模型保存
-  save_dir: "checkpoints/"
-  
-  # 结果保存
-  results_dir: "results/"
-  
-  # 自动恢复
-  resume:
-    enabled: true
-    checkpoint_path: null  # 自动寻找最新checkpoint
-    
-  # 超参数搜索
-  hyperparameter_search:
-    enabled: false
-    search_space:
-      lr: [1.0e-4, 1.0e-3]
-      k: [1, 2, 3]
-      fusion_strategy: ["weighted_average", "attention", "gating"]
-    num_trials: 20
-    
-# ============================================
-# 10. 专家特定配置（高级）
-# ============================================
-expert_specific:
-  # AutoBot特定
-  autobot:
-    use_centerline: true
-    max_centerline_points: 100
-    
-  # MTR特定
-  mtr:
-    intention_points_file: "configs/mtr_intention_points.pkl"
-    
-  # SMART特定
-  smart:
-    goal_points_file: "configs/smart_goals.pkl"
-    
-  # Wayformer特定
-  wayformer:
-    pretrained_path: null
-    use_roadgraph_embedding: true
+        entropy_weight: 40.0
+        kl_weight: 20.0
+        use_FDEADE_aux_loss: True
+        max_epochs: 150 #150 #40
+        learning_rate: 0.00075 # 0.00075 # 1e-3 for lanegcn
+        learning_rate_sched: [ 10, 20, 30, 40, 50 ]
+        optimizer: Adam #According to PyTorch naming
+        scheduler: multistep # plateau, multistep
+        ewc_lambda: 2000
+        train_batch_size: 8 #32 #128
+        eval_batch_size: 8 #32 #128
+        grad_clip_norm: 5
+        max_num_agents: 15
+        map_range: 100
+        max_num_roads: 256
+        max_points_per_lane: 20 # will be overwritten if manually_split_lane is True
+        # lane split related params
+        manually_split_lane: False # if True, lanes will be split with the same number of points and length, else, lanes will be split with the same number of points but varying length
+        point_sampled_interval: 1 # only used when manually_split_lane is True, the interval of points sampled from the original lane
+        num_points_each_polyline: 20 # only used when manually_split_lane is True, the number of points in each polyline
+        vector_break_dist_thresh: 1.0 # only used when manually_split_lane is True, the distance threshold to break the vector to split the lane
+        # common
+      - type: MTR
+        # model
+        CONTEXT_ENCODER:
+          NAME: MTREncoder
+          NUM_OF_ATTN_NEIGHBORS: 7
+          NUM_INPUT_ATTR_AGENT: 39
+          NUM_INPUT_ATTR_MAP: 29
+          NUM_CHANNEL_IN_MLP_AGENT: 256
+          NUM_CHANNEL_IN_MLP_MAP: 64
+          NUM_LAYER_IN_MLP_AGENT: 3
+          NUM_LAYER_IN_MLP_MAP: 5
+          NUM_LAYER_IN_PRE_MLP_MAP: 3
+          D_MODEL: 256
+          NUM_ATTN_LAYERS: 6
+          NUM_ATTN_HEAD: 8
+          DROPOUT_OF_ATTN: 0.1
+          USE_LOCAL_ATTN: True
+
+        MOTION_DECODER:
+          NAME: MTRDecoder
+          NUM_MOTION_MODES: 6
+          INTENTION_POINTS_FILE: '/home/zzs/zzs/unitraj__MOE/unitraj/models/mtr/cluster_64_center_dict_6s.pkl'
+          D_MODEL: 512
+          NUM_DECODER_LAYERS: 6
+          NUM_ATTN_HEAD: 8
+          MAP_D_MODEL: 256
+          DROPOUT_OF_ATTN: 0.1
+          NUM_BASE_MAP_POLYLINES: 256
+          NUM_WAYPOINT_MAP_POLYLINES: 128
+          LOSS_WEIGHTS: {
+            'cls': 1.0,
+            'reg': 1.0,
+            'vel': 0.5
+          }
+
+          NMS_DIST_THRESH: 2.5
+
+        # train
+        max_epochs: 40
+        learning_rate: 0.0001
+        learning_rate_sched: [ 22, 24, 26, 28 ]
+        optimizer: AdamW
+        scheduler: lambdaLR
+        grad_clip_norm: 1000.0
+        weight_decay: 0.01
+        lr_decay: 0.5
+        lr_clip: 0.000001
+        WEIGHT_DECAY: 0.01
+        train_batch_size: 8 #32 #128
+        eval_batch_size: 8 #32 #128
+
+        # data related
+        max_num_agents: 64
+        map_range: 100
+        max_num_roads: 768
+
+        # will be overwritten if manually_split_lane is True
+        max_points_per_lane: 20
+
+        manually_split_lane: True
+        point_sampled_interval: 1
+        num_points_each_polyline: 20
+        vector_break_dist_thresh: 1.0
+      - type: wayformer
+        # model
+        use_map_image: False
+        use_map_lanes: True
+        num_modes: 6
+        num_agent_feature: 39
+        num_map_feature: 29
+        hidden_size: 256
+        num_encoder_layers: 2
+        num_decoder_layers: 8
+        tx_hidden_size: 1024
+        tx_num_heads: 4
+        dropout: 0.1
+        entropy_weight: 40.0
+        kl_weight: 20.0
+        use_FDEADE_aux_loss: True
+        num_queries_dec: 64
+        num_queries_enc: 192
+
+        # train
+        max_epochs: 40 #150 #40
+        learning_rate: 0.0001 # 0.00075 # 1e-3 for lanegcn
+        learning_rate_sched: [ 10, 20, 30, 40, 50 ]
+        optimizer: AdamW #According to PyTorch naming
+        scheduler: multistep # plateau, multistep
+        ewc_lambda: 2000
+        grad_clip_norm: 5
+        train_batch_size: 8 #32 #128
+        eval_batch_size: 8 #32 #128
+
+        # data related
+        max_num_agents: 32
+        map_range: 100
+        max_num_roads: 384
+        max_points_per_lane: 30 # will be overwritten if manually_split_lane is True
+        manually_split_lane: False
+        # lane split related params
+        point_sampled_interval: 1
+        num_points_each_polyline: 20
+        vector_break_dist_thresh: 1.0
+
+
+
+
+
