@@ -1,5 +1,11 @@
 model_name: MOE
-num_experts: 2
+router: 
+  name: TrajAttentionRouter
+  k: 1
+past_len: 21 # history trajectory length, 2.1s
+future_len: 60 # future trajectory length, 6s
+num_experts: 3
+center_offset_of_map: [ 30.0, 0.0 ] 
 in_channels: 256
 hidden_size: 256
 num_queries_enc: 192
@@ -16,9 +22,17 @@ learning_rate: 0.00075 # 0.00075 # 1e-3 for lanegcn
 learning_rate_sched: [ 10, 20, 30, 40, 50 ]
 optimizer: Adam #According to PyTorch naming
 scheduler: multistep # plateau, multistep
+eval_nuscenes: False # whether to evaluate with nuscenes evaluation tool
+eval_waymo: False # whether to evaluate with waymo evaluation tool
+eval_argoverse2: False # whether to evaluate with argoverse evaluation tool
+
 experts_cfg:
       - type: autobot
+        method:
+            model_name: autobot
         num_modes: 6
+        past_len: 21 # history trajectory length, 2.1s
+        future_len: 60 # future trajectory length, 6s
         hidden_size: 128
         num_encoder_layers: 2
         num_decoder_layers: 2
@@ -46,9 +60,21 @@ experts_cfg:
         point_sampled_interval: 1 # only used when manually_split_lane is True, the interval of points sampled from the original lane
         num_points_each_polyline: 20 # only used when manually_split_lane is True, the number of points in each polyline
         vector_break_dist_thresh: 1.0 # only used when manually_split_lane is True, the distance threshold to break the vector to split the lane
+        init_cfg:
+          type: Pretrained
+          checkpoint: /home/zzs/zzs/unitraj__MOE/unitraj_ckpt/autobot_unified_loss/epoch=147-val/brier_fde=1.93-val/minFDE6=1.23-val/minADE6=0.67.ckpt
+
+        
+        
         # common
       - type: MTR
+        method:
+            model_name: MTR
+        past_len: 21 # history trajectory length, 2.1s
+        future_len: 60 # future trajectory length, 6s
         # model
+        center_offset_of_map: [ 30.0, 0.0 ] 
+        object_type: [ 'VEHICLE' ]
         CONTEXT_ENCODER:
           NAME: MTREncoder
           NUM_OF_ATTN_NEIGHBORS: 7
@@ -110,7 +136,15 @@ experts_cfg:
         point_sampled_interval: 1
         num_points_each_polyline: 20
         vector_break_dist_thresh: 1.0
+        init_cfg:
+          type: Pretrained
+          checkpoint: /home/zzs/zzs/unitraj__MOE/unitraj_ckpt/MTR_mini_baseline/epoch=38-val/brier_fde=2.39-val/minFDE6=2.08-val/minADE6=0.90.ckpt
+
       - type: wayformer
+        past_len: 21 # history trajectory length, 2.1s
+        future_len: 60 # future trajectory length, 6s
+        method:
+            model_name: wayformer
         # model
         use_map_image: False
         use_map_lanes: True
@@ -150,6 +184,10 @@ experts_cfg:
         point_sampled_interval: 1
         num_points_each_polyline: 20
         vector_break_dist_thresh: 1.0
+        init_cfg:
+            type: Pretrained
+            checkpoint: /home/zzs/zzs/unitraj__MOE/unitraj_ckpt/wayformer_baseline/epoch=39-val/brier_fde=6.02-val/minFDE6=5.40-val/minADE6=2.45.ckpt
+
 
 
 

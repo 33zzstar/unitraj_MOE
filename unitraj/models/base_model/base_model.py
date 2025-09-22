@@ -324,3 +324,7 @@ class BaseModel(pl.LightningModule):
         #     wandb.log({"prediction": [wandb.Image(img)]})
 
         return
+    def load_balance_loss(routing_probs):
+        expert_mean = routing_probs.mean(dim=0)
+        loss = (expert_mean * routing_probs.sum(dim=0)).sum()
+        return loss
