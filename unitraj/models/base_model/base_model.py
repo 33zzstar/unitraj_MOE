@@ -4,10 +4,12 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import wandb
-
+import pandas as pd
+import os
 import unitraj.datasets.common_utils as common_utils
 import unitraj.utils.visualization as visualization
-
+import csv
+import os
 
 class BaseModel(pl.LightningModule):
 
@@ -47,17 +49,64 @@ class BaseModel(pl.LightningModule):
                 loss (with gradient)
         """
         raise NotImplementedError
-
-    def training_step(self, batch, batch_idx):
-        prediction, loss = self.forward(batch)
-        self.log_info(batch, batch_idx, prediction, status='train')
+    
+    def load_balance_loss(self,routing_probs):
+        expert_mean = routing_probs.mean(dim=0)
+        loss = (expert_mean * routing_probs.sum(dim=0)).sum()
         return loss
+        
+    def training_step(self, batch, batch_idx):
+
+
+        if self.config['method']['model_name']=='MOE':
+            prediction, loss ,routing_probs = self.forward(batch)
+            self.log_info(batch, batch_idx, prediction, status='train')
+            lb_loss = self.load_balance_loss(routing_probs)
+            
+            lb_loss = lb_loss * 0.1
+            loss = lb_loss + loss
+
+
+            csv_path = '/home/zzs/zzs/unitraj__MOE_logs/moe_loss.csv'
+            write_header = not os.path.exists(csv_path)
+
+            with open(csv_path, 'a', newline='') as f:
+                writer = csv.writer(f)
+                if write_header:
+                    writer.writerow(['batch_idx', 'loss', 'lb_loss'])  # 只写一次表头
+                writer.writerow([batch_idx, loss.item(), lb_loss.item()])
+
+
+            return loss
+
+        else :
+            prediction, loss = self.forward(batch)
+            self.log_info(batch, batch_idx, prediction, status='train')
+            csv_path = '/home/zzs/zzs/unitraj__MOE_logs/auto_loss.csv'
+            write_header = not os.path.exists(csv_path)
+
+            with open(csv_path, 'a', newline='') as f:
+                writer = csv.writer(f)
+                if write_header:
+                    writer.writerow(['batch_idx', 'loss'])  # 只写一次表头
+                writer.writerow([batch_idx, loss.item()])
+
+            return loss
 
     def validation_step(self, batch, batch_idx):
-        prediction, loss = self.forward(batch)
-        self.compute_official_evaluation(batch, prediction)
-        self.log_info(batch, batch_idx, prediction, status='val')
-        return loss
+        if self.config['method']['model_name']=='MOE':
+            prediction, loss ,routing_probs = self.forward(batch)
+            self.compute_official_evaluation(batch, prediction)
+            self.log_info(batch, batch_idx, prediction, status='val')
+            lb_loss = self.load_balance_loss(routing_probs)
+            lb_loss = lb_loss * 0.01
+            loss = lb_loss + loss
+            return loss
+        else:
+            prediction, loss = self.forward(batch)
+            self.compute_official_evaluation(batch, prediction)
+            self.log_info(batch, batch_idx, prediction, status='val')
+            return loss
 
     def on_validation_epoch_end(self):
         if self.config.get('eval_waymo', False):
@@ -76,6 +125,8 @@ class BaseModel(pl.LightningModule):
             metric_results = self.compute_metrics_av2(self.pred_dicts)
             
         self.pred_dicts = []
+
+
 
     def configure_optimizers(self):
         raise NotImplementedError
@@ -322,9 +373,13 @@ class BaseModel(pl.LightningModule):
         # if self.local_rank == 0 and status == 'val' and batch_idx == 0:
         #     img = visualization.visualize_prediction(batch, prediction)
         #     wandb.log({"prediction": [wandb.Image(img)]})
+                # === 保存为CSV ===
+        log_dir = "/home/zzs/zzs/unitraj__MOE_logs"      # 绝对路径
+        os.makedirs(log_dir, exist_ok=True)
+        exp_name = self.config.get("exp_name", "default_exp")
+        csv_file = os.path.join(log_dir, f"{exp_name}.csv")
+        df = pd.DataFrame([loss_dict])   # 单行写入
+        write_header = not os.path.exists(csv_file)
+        df.to_csv(csv_file, mode='a', index=False, header=write_header)
 
         return
-    def load_balance_loss(routing_probs):
-        expert_mean = routing_probs.mean(dim=0)
-        loss = (expert_mean * routing_probs.sum(dim=0)).sum()
-        return loss

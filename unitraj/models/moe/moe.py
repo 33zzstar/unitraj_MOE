@@ -205,9 +205,15 @@ class MOE(BaseModel):
                     if k not in batch:
                         batch[k] = v
             return batch
+
         # Obtain experts routing probabilities
         routing_probs = self.router(x)
-        print(routing_probs)
+        self.routing_probs = routing_probs
+        B = routing_probs.size(0)
+
+    
+
+        # print(routing_probs)
         self.last_routing_probs = routing_probs
         #决定使用哪些专家
         if self.training:
@@ -223,13 +229,17 @@ class MOE(BaseModel):
         for i, count in zip(expert_indices, counts):
             expert_name = getattr(self.experts[i], "name", f"Expert {i}")
             percentage = (count / indices.numel()) * 100
-            print(f"Expert {i + 1}: {count} times")
-            print(f"{expert_name}: selected {count.item()} times ({percentage:.2f}%)")
-        print()
-        
+        #     print(f"Expert {i + 1}: {count} times")
+        #     print(f"{expert_name}: selected {count.item()} times ({percentage:.2f}%)")
+        # print()
+  
+        expert_output_predicted_trajectory = torch.zeros((B, 6, 60, 5),device=routing_probs.device)
+        expert_output_predicted_probability = torch.zeros((B, 6),device=routing_probs.device)
         # 每个专家处理对应的样本
         for i, expert in enumerate(self.experts):
             idx, top = torch.where(indices == i)
+            print("indices:", indices)
+            print("i:", i)
 
             if idx.numel() == 0: #如果没有样本分配给这个专家
                 continue
@@ -238,38 +248,44 @@ class MOE(BaseModel):
             #拆分批次
             splits = split_batch(x)
             new_batch = merge_splits(splits, idx, batch_template=len(idx))
+
                         
                                     
             expert_output,expert_output_Loss = expert(new_batch)
             
             expert_type = type(expert).__name__
             if expert_type == "MotionTransformer":
-                expert_output_1 = expert_output['predicted_trajectory']
+                  expert_output_predicted_trajectory[idx] = expert_output['predicted_trajectory']
+                  expert_output_predicted_probability[idx] = expert_output['predicted_probability']
                 # expert_output_2 = self.conv_swint_2(expert_output[1])
                 # expert_output_3 = self.conv_swint_3(expert_output[2])
             elif expert_type == "AutoBotEgo":
-                  expert_output_1 = expert_output['predicted_trajectory']
+                  expert_output_predicted_trajectory[idx] = expert_output['predicted_trajectory']
+                  expert_output_predicted_probability[idx] = expert_output['predicted_probability']
                 #   expert_output_2 = expert_output[1]
                 #   expert_output_3 = expert_output[2]
             elif expert_type == "Wayformer":
-                expert_output_1 = expert_output['predicted_trajectory']
+                expert_output_predicted_trajectory[idx] = expert_output['predicted_trajectory']
+                expert_output_predicted_probability[idx] = expert_output['predicted_probability']
                 # expert_output_2 = self.conv_pvt_2(expert_output[1])
                 # expert_output_3 = self.conv_pvt_3(expert_output[2])
             elif expert_type == "Smart":
-                expert_output_1 = expert_output['predicted_trajectory']
+                expert_output_predicted_trajectory[idx] = expert_output['predicted_trajectory']
+                expert_output_predicted_probability[idx] = expert_output['predicted_probability']
                 # expert_output_2 = self.conv_convnext_2(expert_output[1])
                 # expert_output_3 = self.conv_convnext_3(expert_output[2])
             else:
                 raise ValueError(f"Unsupported expert type {expert_type}")
             
             # 加权组合专家输出
-            # w = weights[idx, top].view(-1, 1, 1, 1)
-            # final_output_1[idx] += expert_output_1 * w
+            w = weights[idx, top].view(-1, 1, 1, 1)
+
             # final_output_2[idx] += expert_output_2 * w
             # final_output_3[idx] += expert_output_3 * w
-
+            expert_output['predicted_trajectory'] = expert_output_predicted_trajectory
+            expert_output['predicted_probability'] = expert_output_predicted_probability
         # return [final_output_1, final_output_2, final_output_3]
-        return expert_output,expert_output_Loss
+        return expert_output,expert_output_Loss,routing_probs
 
 
 
@@ -307,3 +323,7 @@ class MoENetwork(BaseModel):
     def update_lb_loss_weight(self, epoch):
         self.lb_loss_weight = self.lb_loss_weight_initial * (self.lb_loss_decay_rate ** epoch)
         print(f"lb_loss_weight updated to {self.lb_loss_weight}")
+    def load_balance_loss(routing_probs):
+        expert_mean = routing_probs.mean(dim=0)
+        loss = (expert_mean * routing_probs.sum(dim=0)).sum()
+        return loss

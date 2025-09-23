@@ -1,5 +1,5 @@
 # exp setting
-exp_name: 'moe' # name that will be used in wandb
+exp_name: 'autobot_mini' # name that will be used in wandb
 # ckpt_path: /home/zzs/zzs/unitraj__MOE/unitraj_ckpt/autobot_unified_loss/epoch=39-val/brier_fde=3.42-val/minFDE6=2.73-val/minADE6=1.25.ckpt
 ckpt_path: null # checkpoint path, used for evaluation
 seed: 42 # random seed
@@ -32,4 +32,4 @@ eval_waymo: False # whether to evaluate with waymo evaluation tool
 eval_argoverse2: False # whether to evaluate with argoverse evaluation tool
 
 defaults:
-  - method: MOE #autobot MTR wayformer
+  - method: autobot #autobot MTR wayformer
