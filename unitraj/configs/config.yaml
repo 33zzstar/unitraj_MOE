@@ -1,11 +1,12 @@
 # exp setting
-exp_name: 'autobot_mini' # name that will be used in wandb
-# ckpt_path: /home/zzs/zzs/unitraj__MOE/unitraj_ckpt/autobot_unified_loss/epoch=39-val/brier_fde=3.42-val/minFDE6=2.73-val/minADE6=1.25.ckpt
-ckpt_path: null # checkpoint path, used for evaluation
+exp_name: 'MOE' # name that will be used in wandb
+ckpt_path: /home/zzs/zzs/unitraj_ckpt/MOE/epoch=0-val/brier_fde=6.42-val/minFDE6=5.73-val/minADE6=2.43.ckpt
+# ckpt_path: null # checkpoint path, used for evaluation
 seed: 42 # random seed
 debug: False # debug mode, True will use cpu only
 devices: [ 0 ] # gpu ids
-
+ckpt_path_autobot: /home/zzs/zzs/unitraj_ckpt/autobot_mini/epoch=16-val/brier_fde=6.42-val/minFDE6=5.72-val/minADE6=2.42.ckpt
+ckpt_path_wayformer: /home/zzs/zzs/unitraj_ckpt/wayformer_baseline/epoch=39-val/brier_fde=6.02-val/minFDE6=5.40-val/minADE6=2.45.ckpt
 # data related
 load_num_workers: 0 # number of workers for loading data
 train_data_path: [ "/home/zzs/zzs/datasets/data_scenarionet/mini_train/" ] # list of paths to the training data
@@ -32,4 +33,4 @@ eval_waymo: False # whether to evaluate with waymo evaluation tool
 eval_argoverse2: False # whether to evaluate with argoverse evaluation tool
 
 defaults:
-  - method: autobot #autobot MTR wayformer
+  - method: MOE #autobot MTR wayformer

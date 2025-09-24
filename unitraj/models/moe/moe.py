@@ -127,6 +127,8 @@ class MOE(BaseModel):
     def __init__(self, config, init_cfg=None):
         from models import build_model
         super(MOE, self).__init__(config)
+        # ✅ 标记是否只训练 Router
+        self.train_router_only = config.get('train_router_only', True)
         
         self.experts = nn.ModuleList([build_model(cfg) for cfg in config.experts_cfg])
         self.router = TrajAttentionRouter(config)
@@ -238,8 +240,8 @@ class MOE(BaseModel):
         # 每个专家处理对应的样本
         for i, expert in enumerate(self.experts):
             idx, top = torch.where(indices == i)
-            print("indices:", indices)
-            print("i:", i)
+            # print("indices:", indices)
+            # print("i:", i)
 
             if idx.numel() == 0: #如果没有样本分配给这个专家
                 continue
@@ -292,10 +294,28 @@ class MOE(BaseModel):
 
     
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=self.config['learning_rate'], eps=0.0001)
-        scheduler = MultiStepLR(optimizer, milestones=self.config['learning_rate_sched'], gamma=0.5,
-                                verbose=True)
+        # ✅ 只优化 Router 的参数
+        if self.train_router_only:
+            # 只包含 Router 相关参数
+            trainable_params = []
+            trainable_params.extend(self.perceiver_encoder.parameters())
+            trainable_params.extend(self.mlp.parameters())
+            trainable_params.extend(self.agents_dynamic_encoder.parameters())
+            trainable_params.extend(self.road_pts_lin.parameters())
+            trainable_params.append(self.agents_positional_embedding)
+            trainable_params.append(self.temporal_positional_embedding)
+            
+            optimizer = optim.Adam(trainable_params, lr=self.config['learning_rate'], eps=0.0001)
+            print(f"✅ Optimizing {len(list(trainable_params))} Router parameters only")
+        else:
+            # 训练所有参数
+            optimizer = optim.Adam(self.parameters(), lr=self.config['learning_rate'], eps=0.0001)
+            print(f"✅ Optimizing all {len(list(self.parameters()))} parameters")
+            
+        scheduler = MultiStepLR(optimizer, milestones=self.config['learning_rate_sched'], gamma=0.5, verbose=True)
         return [optimizer], [scheduler]
+    
+    
 def init(module, weight_init, bias_init, gain=1):
     '''
     This function provides weight and bias initializations for linear layers.

@@ -1,4 +1,5 @@
 model_name: MOE
+train_router_only: True
 router: 
   name: TrajAttentionRouter
   k: 1
@@ -62,7 +63,7 @@ experts_cfg:
         vector_break_dist_thresh: 1.0 # only used when manually_split_lane is True, the distance threshold to break the vector to split the lane
         init_cfg:
           type: Pretrained
-          checkpoint: /home/zzs/zzs/unitraj__MOE/unitraj_ckpt/autobot_unified_loss/epoch=147-val/brier_fde=1.93-val/minFDE6=1.23-val/minADE6=0.67.ckpt
+          checkpoint: /home/zzs/zzs/unitraj_ckpt/autobot_mini/epoch=16-val/brier_fde=6.42-val/minFDE6=5.72-val/minADE6=2.42.ckpt
 
       - type: wayformer
         past_len: 21 # history trajectory length, 2.1s
@@ -110,7 +111,7 @@ experts_cfg:
         vector_break_dist_thresh: 1.0
         init_cfg:
             type: Pretrained
-            checkpoint: /home/zzs/zzs/unitraj__MOE/unitraj_ckpt/wayformer_baseline/epoch=39-val/brier_fde=6.02-val/minFDE6=5.40-val/minADE6=2.45.ckpt
+            checkpoint: /home/zzs/zzs/unitraj_ckpt/wayformer_baseline/epoch=39-val/brier_fde=6.02-val/minFDE6=5.40-val/minADE6=2.45.ckpt
 
 
  

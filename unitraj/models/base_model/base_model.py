@@ -62,8 +62,7 @@ class BaseModel(pl.LightningModule):
             prediction, loss ,routing_probs = self.forward(batch)
             self.log_info(batch, batch_idx, prediction, status='train')
             lb_loss = self.load_balance_loss(routing_probs)
-            
-            lb_loss = lb_loss * 0.1
+            lb_loss = lb_loss 
             loss = lb_loss + loss
 
 
@@ -99,7 +98,7 @@ class BaseModel(pl.LightningModule):
             self.compute_official_evaluation(batch, prediction)
             self.log_info(batch, batch_idx, prediction, status='val')
             lb_loss = self.load_balance_loss(routing_probs)
-            lb_loss = lb_loss * 0.01
+            lb_loss = lb_loss 
             loss = lb_loss + loss
             return loss
         else:
